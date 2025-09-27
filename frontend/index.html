@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PestEye — AI Pest Detection & Hotspot Forecast</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- Simple icon font -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    :root{
+      --bg:#f6f8fb;
+      --card:#ffffff;
+      --muted:#6b7280;
+      --accent:#16a34a;      /* green */
+      --accent-2:#0ea5a4;    /* teal */
+      --danger:#ef4444;
+      --glass: rgba(255,255,255,0.7);
+      --shadow: 0 8px 30px rgba(16,24,40,0.06);
+      --radius:12px;
+      --maxwidth:1200px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Segoe UI Mono", monospace;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: linear-gradient(180deg, #eef2ff 0%, #f6f8fb 40%);
+      color:#0f172a;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      padding:28px;
+      display:flex;
+      justify-content:center;
+    }
+
+    .container{
+      width:100%;
+      max-width:var(--maxwidth);
+      margin:0 auto;
+    }
+
+    header{
+      display:flex;
+      align-items:center;
+      gap:18px;
+      margin-bottom:18px;
+    }
+    .logo{
+      width:64px;height:64px;border-radius:12px;
+      background:linear-gradient(135deg,var(--accent),var(--accent-2));
+      display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:20px;
+      box-shadow: var(--shadow);
+    }
+    h1{margin:0;font-size:20px}
+    p.lead{margin:4px 0 0;color:var(--muted);font-size:13px}
+
+    .grid{
+      display:grid;
+      grid-template-columns: 430px 1fr;
+      gap:20px;
+      align-items:start;
+    }
+
+    /* left column */
+    .panel{
+      background:var(--card);
+      border-radius:var(--radius);
+      padding:18px;
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+
+    .upload-area{
+      border:2px dashed #e6eef7;
+      border-radius:10px;
+      padding:14px;
+      display:flex;
+      gap:12px;
+      align-items:center;
+      background:linear-gradient(180deg, rgba(10,20,60,0.01), transparent);
+    }
+    .upload-thumb{
+      width:92px;height:92px;border-radius:8px;background:#f8fafc;border:1px solid #eef2ff;
+      display:flex;align-items:center;justify-content:center;overflow:hidden;
+    }
+    .upload-thumb img{width:100%;height:100%;object-fit:cover}
+
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .btn{
+      padding:10px 14px;border-radius:8px;border:0;cursor:pointer;font-weight:600;
+      box-shadow: 0 6px 18px rgba(16,24,40,0.06);
+    }
+    .btn.primary{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:white}
+    .btn.ghost{background:transparent;border:1px solid #e6eef7;color:var(--muted)}
+    .btn.warn{background:var(--danger);color:white}
+
+    /* status */
+    .status {
+      margin-top:14px;
+      display:flex;align-items:center;gap:12px;
+    }
+    .meter{
+      flex:1;height:12px;background:#eef2ff;border-radius:999px;overflow:hidden;
+      border:1px solid rgba(0,0,0,0.02);
+    }
+    .meter > .fill{
+      height:100%; width:0%; background:linear-gradient(90deg,var(--accent),var(--accent-2));
+      transition:width .4s ease;
+    }
+
+    /* results */
+    .results{margin-top:16px;display:flex;flex-direction:column;gap:10px}
+    .pred-card{display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;background:#f8fafc;border:1px solid #eef2ff}
+    .pred-main{font-weight:700}
+    .pred-sub{color:var(--muted);font-size:13px}
+    .pred-list{margin-top:10px}
+    .pred-item{display:flex;justify-content:space-between;padding:8px 10px;border-radius:8px;background:white;border:1px solid #f1f5f9;margin-bottom:6px}
+
+    /* right column */
+    .map-panel{display:flex;flex-direction:column;gap:12px}
+    #map{height:520px;border-radius:12px;border:1px solid #e6eef7;overflow:hidden}
+    .loc-controls{display:flex;gap:8px;align-items:center}
+    input[type="text"]{flex:1;padding:10px;border-radius:8px;border:1px solid #e6eef7}
+    label.small{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+
+    footer{margin-top:18px;color:var(--muted);font-size:13px;display:flex;justify-content:space-between;align-items:center}
+
+    /* responsive */
+    @media (max-width:980px){
+      .grid{grid-template-columns:1fr; }
+      #map{height:360px}
+    }
+
+    /* subtle micro interactions */
+    .small{font-size:13px;color:var(--muted)}
+    .chip{background:#eef2ff;padding:6px 10px;border-radius:999px;font-weight:600;color: #0b1220}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo"><i class="fas fa-bug"></i></div>
+      <div>
+        <h1>PestEye — Pest Detection & Hotspot Forecaster</h1>
+        <p class="lead">Upload plant images (drone or handheld) → get pest predictions and short-term hotspot forecast on the map.</p>
+      </div>
+    </header>
+
+    <main class="grid">
+      <!-- LEFT: upload & results -->
+      <section class="panel">
+        <div style="display:flex;gap:16px;align-items:flex-start;">
+          <div class="upload-area" style="flex:1">
+            <div class="upload-thumb" id="thumb">
+              <i class="fas fa-image" style="font-size:28px;color:#93c5fd"></i>
+            </div>
+            <div style="flex:1">
+              <label class="small">Upload image</label>
+              <input id="image-input" type="file" accept="image/*" style="width:100%"/>
+              <div class="small" style="margin-top:6px;color:var(--muted)">Recommended: clear close-up images or drone crop images. Supported formats: JPG, PNG.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="controls" style="margin-top:14px">
+          <button id="detect-btn" class="btn primary"><i class="fas fa-magnifying-glass"></i>&nbsp; Analyze</button>
+          <button id="clear-btn" class="btn ghost"><i class="fas fa-trash"></i>&nbsp; Clear</button>
+          <button id="use-current-location" class="btn ghost"><i class="fas fa-location-arrow"></i>&nbsp; Use Current Location</button>
+          <div style="flex:1"></div>
+          <div class="chip" id="model-status">Model: Ready</div>
+        </div>
+
+        <div class="status">
+          <div style="min-width:120px" class="small">Confidence</div>
+          <div class="meter"><div class="fill" id="confidence-fill"></div></div>
+          <div style="width:60px;text-align:right;font-weight:700" id="confidence-value">0%</div>
+        </div>
+
+        <div class="results" id="results" style="display:none">
+          <div class="pred-card">
+            <div style="flex:1">
+              <div class="pred-main" id="pest-name">—</div>
+              <div class="pred-sub" id="pest-sub">Top prediction</div>
+            </div>
+            <div style="text-align:right">
+              <div class="small">Detected</div>
+              <div style="font-weight:700" id="pest-id">#—</div>
+            </div>
+          </div>
+
+          <div class="pred-list" id="pred-list"></div>
+        </div>
+
+        <div style="margin-top:12px;color:var(--muted);font-size:13px">
+          <strong>Notes:</strong> Hotspots appear only when you provide coordinates (enter address or click <em>Use Current Location</em>).
+        </div>
+      </section>
+
+      <!-- RIGHT: Map & location -->
+      <aside class="map-panel">
+        <div class="panel" style="padding:12px">
+          <label class="small">Location</label>
+          <div class="loc-controls">
+            <input id="location-input" type="text" placeholder="Enter coordinates: lat, lon (e.g. 12.9716, 77.5946)" />
+            <button id="set-location-btn" class="btn ghost">Set</button>
+          </div>
+          <div class="small" style="margin-top:8px">You can set a location first, or use current device location before analysis.</div>
+        </div>
+
+        <div id="map" class="panel"></div>
+
+        <div class="panel" style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-weight:700">Detection History</div>
+            <div class="small" id="history-note">No detections yet</div>
+          </div>
+          <div>
+            <button id="download-history" class="btn ghost"><i class="fas fa-download"></i>&nbsp; Export</button>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <footer>
+      <div>© <strong>PestEye</strong> — Precision Agriculture Tool</div>
+      <div class="small">Backend: Local Flask • Model: EfficientNet</div>
+    </footer>
+  </div>
+
+  <!-- Leaflet -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+  // ---------- lightweight frontend logic (single-file) ----------
+  const imageInput = document.getElementById('image-input');
+  const thumb = document.getElementById('thumb');
+  const detectBtn = document.getElementById('detect-btn');
+  const clearBtn = document.getElementById('clear-btn');
+  const useCurrentBtn = document.getElementById('use-current-location');
+  const locationInput = document.getElementById('location-input');
+  const setLocationBtn = document.getElementById('set-location-btn');
+  const modelStatus = document.getElementById('model-status');
+
+  const confFill = document.getElementById('confidence-fill');
+  const confVal = document.getElementById('confidence-value');
+
+  const resultsBox = document.getElementById('results');
+  const pestName = document.getElementById('pest-name');
+  const pestSub = document.getElementById('pest-sub');
+  const pestId = document.getElementById('pest-id');
+  const predList = document.getElementById('pred-list');
+
+  const historyNote = document.getElementById('history-note');
+
+  // map init
+  const map = L.map('map', {zoomControl:true}).setView([12.9716, 77.5946], 10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+  const layers = L.layerGroup().addTo(map);
+
+  // store a tiny local history for demo (in-memory)
+  let detectionHistory = [];
+
+  // display image thumbnail
+  imageInput.addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = (ev) => {
+      thumb.innerHTML = `<img src="${ev.target.result}" alt="thumb">`;
+      resultsBox.style.display = 'none';
+      confFill.style.width = '0%';
+      confVal.textContent = '0%';
+    }
+    r.readAsDataURL(f);
+  });
+
+  // clear
+  clearBtn.addEventListener('click', () => {
+    imageInput.value = '';
+    thumb.innerHTML = '<i class="fas fa-image" style="font-size:28px;color:#93c5fd"></i>';
+    resultsBox.style.display = 'none';
+    predList.innerHTML = '';
+    detectionHistory = [];
+    historyNote.textContent = 'No detections yet';
+    layers.clearLayers();
+  });
+
+  // use current location (fills input)
+  useCurrentBtn.addEventListener('click', () => {
+    if (!navigator.geolocation) { alert('Geolocation not supported by this browser'); return; }
+    navigator.geolocation.getCurrentPosition((pos) => {
+      const lat = pos.coords.latitude.toFixed(6);
+      const lon = pos.coords.longitude.toFixed(6);
+      locationInput.value = `${lat}, ${lon}`;
+      map.setView([lat, lon], 13);
+      layers.clearLayers();
+      L.marker([lat, lon]).addTo(layers).bindPopup('Selected location').openPopup();
+    }, (err) => {
+      alert('Unable to get current location. Use localhost:5000 or load over HTTPS.');
+    }, {enableHighAccuracy:true, timeout:8000});
+  });
+
+  // set location button (manual coords)
+  setLocationBtn.addEventListener('click', () => {
+    const m = locationInput.value.trim().match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
+    if (!m) { alert('Enter coordinates: lat, lon (e.g. 12.9716, 77.5946)'); return; }
+    const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+    map.setView([lat, lon], 13);
+    layers.clearLayers();
+    L.marker([lat, lon]).addTo(layers).bindPopup('Selected location').openPopup();
+  });
+
+  // download history (CSV)
+  document.getElementById('download-history').addEventListener('click', () => {
+    if (detectionHistory.length === 0) { alert('No detections to export'); return; }
+    const rows = [['timestamp','label','id','confidence','lat','lon']];
+    detectionHistory.forEach(d => rows.push([d.t, d.label, d.id, d.conf.toFixed(4), d.lat || '', d.lon || '']));
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+    a.download = 'detections.csv'; document.body.appendChild(a); a.click(); a.remove();
+  });
+
+  // helper: call backend predict
+  async function callPredict(file, lat=null, lon=null){
+    const form = new FormData();
+    form.append('file', file);
+    if (lat !== null && lon !== null){
+      form.append('lat', String(lat));
+      form.append('lon', String(lon));
+    }
+    modelStatus.textContent = 'Model: Predicting...';
+    try {
+      const res = await fetch('/predict', {method:'POST', body: form});
+      if (!res.ok) throw new Error('Server error');
+      const data = await res.json();
+      return data;
+    } finally {
+      modelStatus.textContent = 'Model: Ready';
+    }
+  }
+
+  // main analyze button
+  detectBtn.addEventListener('click', async () => {
+    const file = imageInput.files && imageInput.files[0];
+    if (!file){ alert('Please choose an image first.'); return; }
+
+    // if location input has coords, include them; else we won't send coords
+    const coordMatch = locationInput.value.trim().match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
+    const lat = coordMatch ? parseFloat(coordMatch[1]) : null;
+    const lon = coordMatch ? parseFloat(coordMatch[2]) : null;
+
+    detectBtn.disabled = true;
+    detectBtn.textContent = 'Analyzing...';
+    document.getElementById('pred-list').innerHTML = '';
+    try {
+      const data = await callPredict(file, lat, lon);
+
+      // update UI
+      const cid = data.pest_id ?? (data.top_predictions && data.top_predictions[0] && data.top_predictions[0].class_id);
+      const name = data.pest_name ?? (data.top_predictions && data.top_predictions[0] && data.top_predictions[0].label);
+      const conf = data.confidence ?? ((data.top_predictions && data.top_predictions[0] && data.top_predictions[0].confidence) || 0);
+
+      pestName.textContent = name;
+      pestSub.textContent = `Detected (top) — confidence ${(conf*100).toFixed(1)}%`;
+      pestId.textContent = `#${cid !== undefined ? cid : '—'}`;
+      confFill.style.width = `${Math.round(conf*100)}%`;
+      confVal.textContent = `${Math.round(conf*100)}%`;
+
+      // list top predictions with index + label
+      predList.innerHTML = '';
+      if (data.top_predictions && data.top_predictions.length){
+        data.top_predictions.forEach(p => {
+          const div = document.createElement('div');
+          div.className = 'pred-item';
+          div.innerHTML = `<div style="font-weight:600">${p.label}</div><div style="text-align:right;color:${p.confidence>0.3? 'var(--accent)':'var(--muted)'}">${(p.confidence*100).toFixed(1)}%<div style="font-size:11px;color:var(--muted)">#${p.class_id}</div></div>`;
+          predList.appendChild(div);
+        });
+      }
+
+      resultsBox.style.display = 'block';
+
+      // if backend returned detection_location, show marker + hotspots
+      if (data.detection_location){
+        const d = data.detection_location;
+        layers.clearLayers();
+        map.setView([d.lat, d.lon], 13);
+        L.marker([d.lat, d.lon]).addTo(layers).bindPopup(`<b>${name}</b><br>${(conf*100).toFixed(1)}%`).openPopup();
+        if (data.predicted_hotspots && data.predicted_hotspots.length){
+          data.predicted_hotspots.forEach(h => {
+            L.circle([h.lat, h.lon], {radius:h.radius_m||500, color:'crimson', fillOpacity:0.18}).addTo(layers);
+          });
+        }
+      } else {
+        // no location: do NOT show hotspots; keep thumb and prompt
+        layers.clearLayers();
+        alert('No location provided — hotspots will appear after you set coordinates or use current location.');
+      }
+
+      // append to history
+      detectionHistory.unshift({
+        t: (new Date()).toISOString(),
+        label: name,
+        id: cid,
+        conf: conf,
+        lat: data.detection_location ? data.detection_location.lat : null,
+        lon: data.detection_location ? data.detection_location.lon : null
+      });
+      historyNote.textContent = `${detectionHistory.length} detections (this session)`;
+
+    } catch (err){
+      console.error(err);
+      alert('Prediction failed: ' + (err.message || err));
+    } finally {
+      detectBtn.disabled = false;
+      detectBtn.innerHTML = '<i class="fas fa-magnifying-glass"></i>&nbsp; Analyze';
+    }
+  });
+
+  // small UX: press Enter in location input sets the map
+  locationInput.addEventListener('keypress', (e) => { if (e.key === 'Enter'){ setLocationBtn.click(); } });
+
+  </script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data, models, checkpoints (keep out of repo)
+ip102_v1.1/
+scr/models/
+models/
+*.pth
+*.pt
+*.ckpt
+*.h5
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
