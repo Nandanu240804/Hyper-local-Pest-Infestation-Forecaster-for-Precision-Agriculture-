@@ -28,3 +28,7 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+venv/
+ip102_v1.1/
+scr/models/
+models/
